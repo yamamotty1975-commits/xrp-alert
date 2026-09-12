@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>XRP Alert</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;background:#f3f4f6;color:#111827}
+.wrap{max-width:520px;margin:auto;padding:24px 18px 40px}
+h1{font-size:28px;margin:10px 0 4px}
+.sub{color:#6b7280;margin-bottom:22px}
+.card{background:white;border-radius:20px;padding:20px;margin:14px 0;box-shadow:0 4px 18px #0000000d}
+.price{font-size:42px;font-weight:800;margin:8px 0}
+.status{font-size:14px;color:#6b7280}
+label{display:block;font-weight:700;margin:14px 0 7px}
+input{width:100%;font-size:22px;padding:13px;border:1px solid #d1d5db;border-radius:12px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{width:100%;border:0;border-radius:12px;padding:14px;font-size:17px;font-weight:700;background:#111827;color:white}
+button.secondary{background:#e5e7eb;color:#111827}
+.alert{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid #eee}
+.alert:last-child{border-bottom:0}
+.badge{font-size:12px;padding:5px 8px;border-radius:999px;background:#dcfce7;color:#166534}
+.badge.off{background:#fee2e2;color:#991b1b}
+.small{font-size:13px;color:#6b7280;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>💠 XRP ALERT</h1>
+  <div class="sub">XRP / JPY 価格アラート</div>
+
+  <div class="card">
+    <div class="status">現在価格</div>
+    <div id="price" class="price">取得中…</div>
+    <div id="updated" class="status">価格を取得しています</div>
+  </div>
+
+  <div class="card">
+    <h2>🔔 アラート設定</h2>
+    <label>通知価格（円）</label>
+    <input id="target" type="number" inputmode="decimal" placeholder="例：500">
+    <div class="row" style="margin-top:12px">
+      <button onclick="addAlert()">アラートを追加</button>
+      <button class="secondary" onclick="requestNotify()">通知を許可</button>
+    </div>
+    <p class="small">※現在は試作版です。価格監視は30秒ごとに行います。</p>
+  </div>
+
+  <div class="card">
+    <h2>登録中のアラート</h2>
+    <div id="alerts"><div class="small">まだありません。</div></div>
+  </div>
+</div>
+
+<script>
+const API='https://min-api.cryptocompare.com/data/price?fsym=XRP&tsyms=JPY';
+let price=null;
+let alerts=JSON.parse(localStorage.getItem('xrpAlerts')||'[]');
+
+function yen(n){return '¥'+Number(n).toLocaleString('ja-JP',{maximumFractionDigits:2});}
+function save(){localStorage.setItem('xrpAlerts',JSON.stringify(alerts)); render();}
+
+async function getPrice(){
+  try{
+    const r=await fetch(API,{cache:'no-store'});
+    const d=await r.json();
+    if(typeof d.JPY!=='number') throw new Error('price');
+    const old=price; price=d.JPY;
+    document.getElementById('price').textContent=yen(price);
+    document.getElementById('updated').textContent='最終更新：'+new Date().toLocaleTimeString('ja-JP');
+    checkAlerts(old,price);
+  }catch(e){
+    document.getElementById('price').textContent='取得失敗';
+    document.getElementById('updated').textContent='通信を確認してください';
+  }
+}
+
+function addAlert(){
+  const v=Number(document.getElementById('target').value);
+  if(!v || v<=0){alert('通知価格を入力してください');return;}
+  alerts.push({target:v,active:true});
+  document.getElementById('target').value='';
+  save();
+}
+
+function checkAlerts(oldP,newP){
+  if(oldP===null) return;
+  alerts.forEach(a=>{
+    if(!a.active) return;
+    const crossed=(oldP<a.target && newP>=a.target)||(oldP>a.target && newP<=a.target);
+    if(crossed){
+      a.active=false;
+      const msg='XRPが '+yen(a.target)+' に到達しました。現在価格 '+yen(newP);
+      if('Notification' in window && Notification.permission==='granted'){
+        new Notification('XRP価格アラート',{body:msg});
+      }else{
+        alert('🔔 '+msg);
+      }
+    }
+  });
+  save();
+}
+
+async function requestNotify(){
+  if(!('Notification' in window)){alert('この環境では通知機能を利用できません。');return;}
+  const p=await Notification.requestPermission();
+  alert(p==='granted'?'通知を許可しました。':'通知は許可されませんでした。');
+}
+
+function render(){
+  const el=document.getElementById('alerts');
+  if(!alerts.length){el.innerHTML='<div class="small">まだありません。</div>';return;}
+  el.innerHTML=alerts.map((a,i)=>`
+    <div class="alert">
+      <div><strong>${yen(a.target)}</strong><br><span class="small">${a.active?'監視中':'通知済み'}</span></div>
+      <div>
+        <span class="badge ${a.active?'':'off'}">${a.active?'ON':'OFF'}</span>
+        <button style="margin-left:7px;width:auto;padding:7px 10px;font-size:13px" onclick="removeAlert(${i})">削除</button>
+      </div>
+    </div>`).join('');
+}
+function removeAlert(i){alerts.splice(i,1);save();}
+render(); getPrice(); setInterval(getPrice,30000);
+</script>
+</body>
+</html>
