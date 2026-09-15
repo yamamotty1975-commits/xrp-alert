@@ -2,28 +2,33 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#111827">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#ffffff">
 <title>XRP Alert</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;background:#f3f4f6;color:#111827}
-.wrap{max-width:520px;margin:auto;padding:24px 18px 40px}
-h1{font-size:28px;margin:10px 0 4px}
-.sub{color:#6b7280;margin-bottom:22px}
-.card{background:white;border-radius:20px;padding:20px;margin:14px 0;box-shadow:0 4px 18px #0000000d}
-.price{font-size:42px;font-weight:800;margin:8px 0}
-.status{font-size:14px;color:#6b7280}
-label{display:block;font-weight:700;margin:14px 0 7px}
-input{width:100%;font-size:22px;padding:13px;border:1px solid #d1d5db;border-radius:12px}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-button{width:100%;border:0;border-radius:12px;padding:14px;font-size:17px;font-weight:700;background:#111827;color:white}
+body{margin:0;padding:24px 16px 40px;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;background:#f4f5f7;color:#111827}
+.wrap{max-width:760px;margin:auto}
+h1{font-size:34px;margin:0 0 4px;font-weight:800;letter-spacing:.5px}
+.sub{font-size:22px;color:#6b7280;font-weight:700;margin-bottom:26px}
+.card{background:#fff;border-radius:28px;padding:28px 24px;margin:18px 0;box-shadow:0 5px 18px rgba(0,0,0,.05)}
+.label{font-size:22px;font-weight:800;color:#6b7280}
+.price{font-size:58px;font-weight:900;margin:12px 0 0;letter-spacing:-2px}
+.updated{font-size:17px;color:#6b7280;margin-top:4px}
+h2{font-size:28px;margin:0 0 22px}
+input{width:100%;font-size:25px;padding:18px;border:2px solid #d1d5db;border-radius:18px;outline:none}
+input:focus{border-color:#111827}
+.row{display:flex;gap:14px;margin-top:16px}
+button{flex:1;border:0;border-radius:18px;padding:18px 12px;font-size:20px;font-weight:800;background:#111827;color:#fff}
 button.secondary{background:#e5e7eb;color:#111827}
-.alert{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid #eee}
-.alert:last-child{border-bottom:0}
-.badge{font-size:12px;padding:5px 8px;border-radius:999px;background:#dcfce7;color:#166534}
-.badge.off{background:#fee2e2;color:#991b1b}
-.small{font-size:13px;color:#6b7280;line-height:1.5}
+button:active{transform:scale(.99)}
+.note{font-size:16px;color:#6b7280;line-height:1.6;margin-top:18px}
+.alert{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #e5e7eb;padding:14px 0;font-size:18px}
+.alert:first-child{border-top:0}
+.smallbtn{flex:0 0 auto;padding:10px 14px;font-size:15px}
+.empty{color:#6b7280;font-size:18px}
+.status-ok{color:#166534}
+.status-ng{color:#b91c1c}
 </style>
 </head>
 <body>
@@ -32,97 +37,156 @@ button.secondary{background:#e5e7eb;color:#111827}
   <div class="sub">XRP / JPY 価格アラート</div>
 
   <div class="card">
-    <div class="status">現在価格</div>
+    <div class="label">現在価格</div>
     <div id="price" class="price">取得中…</div>
-    <div id="updated" class="status">価格を取得しています</div>
+    <div id="updated" class="updated">価格を取得しています</div>
   </div>
 
   <div class="card">
     <h2>🔔 アラート設定</h2>
-    <label>通知価格（円）</label>
-    <input id="target" type="number" inputmode="decimal" placeholder="例：500">
-    <div class="row" style="margin-top:12px">
+    <label for="target" style="font-size:20px;font-weight:800;display:block;margin-bottom:10px">通知価格（円）</label>
+    <input id="target" type="number" inputmode="decimal" step="0.01" placeholder="例：500">
+    <div class="row">
       <button onclick="addAlert()">アラートを追加</button>
       <button class="secondary" onclick="requestNotify()">通知を許可</button>
     </div>
-    <p class="small">※現在は試作版です。価格監視は30秒ごとに行います。</p>
+    <div class="note">
+      ※試作版です。価格監視は30秒ごとに行います。<br>
+      ※この画面を開いている間の監視・通知を行います。
+    </div>
+    <div id="status" class="note"></div>
   </div>
 
   <div class="card">
     <h2>登録中のアラート</h2>
-    <div id="alerts"><div class="small">まだありません。</div></div>
+    <div id="alerts" class="empty">まだありません。</div>
   </div>
 </div>
 
 <script>
-const API='https://min-api.cryptocompare.com/data/price?fsym=XRP&tsyms=JPY';
-let price=null;
-let alerts=JSON.parse(localStorage.getItem('xrpAlerts')||'[]');
+const API = 'https://public.bitbank.cc/xrp_jpy/ticker';
+let price = null;
+let alerts = JSON.parse(localStorage.getItem('xrp_alerts') || '[]');
 
-function yen(n){return '¥'+Number(n).toLocaleString('ja-JP',{maximumFractionDigits:2});}
-function save(){localStorage.setItem('xrpAlerts',JSON.stringify(alerts)); render();}
+function yen(n){
+  return Number(n).toLocaleString('ja-JP',{maximumFractionDigits:2}) + ' 円';
+}
 
 async function getPrice(){
+  const priceEl = document.getElementById('price');
+  const updatedEl = document.getElementById('updated');
   try{
-    const r=await fetch(API,{cache:'no-store'});
-    const d=await r.json();
-    if(typeof d.JPY!=='number') throw new Error('price');
-    const old=price; price=d.JPY;
-    document.getElementById('price').textContent=yen(price);
-    document.getElementById('updated').textContent='最終更新：'+new Date().toLocaleTimeString('ja-JP');
-    checkAlerts(old,price);
+    const r = await fetch(API + '?t=' + Date.now(), {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+
+    if(!j || j.success !== 1 || !j.data || j.data.last == null){
+      throw new Error('価格データがありません');
+    }
+
+    const newPrice = Number(j.data.last);
+    if(!Number.isFinite(newPrice)) throw new Error('価格が数値ではありません');
+
+    const oldPrice = price;
+    price = newPrice;
+
+    priceEl.textContent = yen(price);
+    updatedEl.textContent = '最終更新：' + new Date().toLocaleTimeString('ja-JP');
+    updatedEl.className = 'updated status-ok';
+
+    if(oldPrice !== null) checkAlerts(oldPrice, newPrice);
   }catch(e){
-    document.getElementById('price').textContent='取得失敗';
-    document.getElementById('updated').textContent='通信を確認してください';
+    console.error(e);
+    priceEl.textContent = '取得失敗';
+    updatedEl.textContent = '通信を確認してください';
+    updatedEl.className = 'updated status-ng';
   }
 }
 
 function addAlert(){
-  const v=Number(document.getElementById('target').value);
-  if(!v || v<=0){alert('通知価格を入力してください');return;}
-  alerts.push({target:v,active:true});
-  document.getElementById('target').value='';
-  save();
+  const input = document.getElementById('target');
+  const target = Number(input.value);
+  if(!Number.isFinite(target) || target <= 0){
+    alert('通知価格を入力してください。');
+    return;
+  }
+
+  alerts.push({target,active:true});
+  localStorage.setItem('xrp_alerts',JSON.stringify(alerts));
+  input.value = '';
+  render();
 }
 
 function checkAlerts(oldP,newP){
-  if(oldP===null) return;
   alerts.forEach(a=>{
     if(!a.active) return;
-    const crossed=(oldP<a.target && newP>=a.target)||(oldP>a.target && newP<=a.target);
-    if(crossed){
-      a.active=false;
-      const msg='XRPが '+yen(a.target)+' に到達しました。現在価格 '+yen(newP);
-      if('Notification' in window && Notification.permission==='granted'){
-        new Notification('XRP価格アラート',{body:msg});
+
+    const crossedUp = oldP < a.target && newP >= a.target;
+    const crossedDown = oldP > a.target && newP <= a.target;
+
+    if(crossedUp || crossedDown){
+      a.active = false;
+      const msg = 'XRPが ' + yen(a.target) + ' を超えました。現在 ' + yen(newP);
+      if('Notification' in window && Notification.permission === 'granted'){
+        new Notification('XRP価格アラート', {body:msg});
       }else{
-        alert('🔔 '+msg);
+        alert(msg);
       }
     }
   });
-  save();
+  localStorage.setItem('xrp_alerts',JSON.stringify(alerts));
+  render();
 }
 
 async function requestNotify(){
-  if(!('Notification' in window)){alert('この環境では通知機能を利用できません。');return;}
-  const p=await Notification.requestPermission();
-  alert(p==='granted'?'通知を許可しました。':'通知は許可されませんでした。');
+  const status = document.getElementById('status');
+
+  if(!('Notification' in window)){
+    status.textContent = 'このブラウザでは通知機能を利用できません。';
+    status.className = 'note status-ng';
+    return;
+  }
+
+  try{
+    const p = await Notification.requestPermission();
+    if(p === 'granted'){
+      status.textContent = '通知が許可されました。';
+      status.className = 'note status-ok';
+      new Notification('XRP ALERT', {body:'通知設定が有効になりました。'});
+    }else{
+      status.textContent = '通知は許可されませんでした。';
+      status.className = 'note status-ng';
+    }
+  }catch(e){
+    status.textContent = '通知設定でエラーが発生しました。';
+    status.className = 'note status-ng';
+  }
+}
+
+function removeAlert(i){
+  alerts.splice(i,1);
+  localStorage.setItem('xrp_alerts',JSON.stringify(alerts));
+  render();
 }
 
 function render(){
-  const el=document.getElementById('alerts');
-  if(!alerts.length){el.innerHTML='<div class="small">まだありません。</div>';return;}
-  el.innerHTML=alerts.map((a,i)=>`
+  const el = document.getElementById('alerts');
+  if(!alerts.length){
+    el.innerHTML = '<div class="empty">まだありません。</div>';
+    return;
+  }
+
+  el.innerHTML = alerts.map((a,i)=>`
     <div class="alert">
-      <div><strong>${yen(a.target)}</strong><br><span class="small">${a.active?'監視中':'通知済み'}</span></div>
-      <div>
-        <span class="badge ${a.active?'':'off'}">${a.active?'ON':'OFF'}</span>
-        <button style="margin-left:7px;width:auto;padding:7px 10px;font-size:13px" onclick="removeAlert(${i})">削除</button>
-      </div>
-    </div>`).join('');
+      <span><strong>${yen(a.target)}</strong> ${a.active ? '🔔 監視中' : '✓ 通知済み'}</span>
+      <button class="smallbtn secondary" onclick="removeAlert(${i})">削除</button>
+    </div>
+  `).join('');
 }
-function removeAlert(i){alerts.splice(i,1);save();}
-render(); getPrice(); setInterval(getPrice,30000);
+
+render();
+getPrice();
+setInterval(getPrice,30000);
 </script>
 </body>
 </html>
